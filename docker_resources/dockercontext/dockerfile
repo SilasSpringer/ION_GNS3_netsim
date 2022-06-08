@@ -1,4 +1,4 @@
-FROM ion:0.1
+FROM ion_base_image:0.1
 
 RUN mkdir ion_config
 COPY conf_script.sh ./ion_config/
