@@ -1,0 +1,42 @@
+FROM ubuntu AS image
+
+# get some basics
+RUN apt-get -y update
+RUN apt-get -y install sudo
+
+RUN apt-get -y install wget
+
+RUN sudo apt update
+RUN sudo apt install build-essential -y
+
+# pull ion repo
+RUN wget https://sourceforge.net/projects/ion-dtn/files/ion-open-source-4.1.0.tar.gz/download
+
+# unpack
+RUN tar xvzf download
+
+# set work dir
+WORKDIR /ion-open-source-4.1.0
+
+# configure ION
+RUN ./configure
+
+# make ion
+RUN make
+
+RUN sudo make install
+
+RUN sudo ldconfig
+
+# get ping
+RUN apt update
+RUN apt-get install iputils-ping -y
+RUN apt install -y iproute2
+
+# get dhcp client
+RUN sudo apt install isc-dhcp-client -y
+
+# clean apt update list.
+RUN rm -rf /var/lib/apt/lists/*
+
+

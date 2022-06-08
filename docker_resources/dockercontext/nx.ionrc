@@ -1,0 +1,8 @@
+# INITIALIZE
+# Ion node number: <X>
+# Ion configuration file name: nx.ionconfig
+1 <X> nx.ionconfig
+#
+# START
+# Program: rfxclock
+s

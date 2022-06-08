@@ -1,0 +1,16 @@
+#---------------------------------------------------
+-
+# Add an egress plan. (to neighboring nodes/hosts)
+#---------------------------------------------------
+-
+#a plan <node> <protocol>/<num/address>
+#a plan X ltp/X
+#a plan Y [tcp|udp]/[IP_ADDR]:[PORT]
+# The following line adds a ‘loopback’ plan
+a plan <x> udp/127.0.0.1:4556
+
+# currently only on eth0
+a plan <y> tcp/192.168.0.<y>0:4556
+a plan <y> tcp/192.168.0.<y>1:4556
+
+# above line may or may not be right. <x> is the node number of the current node.

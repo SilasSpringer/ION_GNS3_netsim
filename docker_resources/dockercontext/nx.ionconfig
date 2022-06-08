@@ -1,0 +1,7 @@
+wmKey 0
+sdrName ion
+wmSize 5000000
+# default, can set up config to change it later.
+configFlags 15 
+heapWords 5000000
+pathName /var/ion

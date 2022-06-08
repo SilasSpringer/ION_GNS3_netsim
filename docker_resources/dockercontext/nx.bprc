@@ -1,0 +1,50 @@
+# Initialization command (command 1).
+1
+# Add an EID scheme.
+a scheme ipn 'ipnfw' 'ipnadminep’
+# Add some endpoints
+# a endpoint <endpoint> ‘x’ or ‘q’
+a endpoint ipn:<x>.<y> x
+# Add protocols for external nodes.
+#-----------------------------------------------------------------
+# Estimate transmission capacity assuming 1400 bytes of each frame for payload, and 100 bytes for overhead.
+# a protocol [tcp|udp|ltp] 1400 100
+#
+# The following line will support a 'loopback’ communication capability using UDP
+
+a protocol tcp 1400 100
+a protocol udp 1400 100
+a protocol ltp 1400 100
+
+# Add inducts. (listen)
+#-----------------------------------------------------------------
+# a induct [tcp|udp] 0.0.0.0:4556 [PROTO]cli
+
+a induct tcp 0.0.0.0:4556 tcpcli
+a induct udp 0.0.0.0:4556 udpcli
+a induct ltp <x> ltpcli
+
+# Add outducts.
+#-----------------------------------------------------------------
+# a outduct [tcp|udp] DEST_IP_ADDR:DEST_IP_PORT [udpclo|””]
+#a outduct ltp <x> ltpclo
+#
+# The following line adds a ‘loopback’ UDP outduct
+
+a outduct udp 127.0.0.1:4556 udpclo
+
+# may need to use something other than y, since this should be a separate category from just 'neighbors'
+# testing....
+# currently only on eth0
+a outduct tcp 192.168.0.<y>0:4556 tcpclo
+
+# Select level of BP watch activities - 0 = None; 1 = All
+#-----------------------------------------------------------------
+w 1
+# RUN
+# Program: ipnadmin
+
+# On the configuration file name: nx.ipnrc
+r 'ipnadmin nx.ipnrc'
+# Start all declared schemes and protocols on the local node
+s 
