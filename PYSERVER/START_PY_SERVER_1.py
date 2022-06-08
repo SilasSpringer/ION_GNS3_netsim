@@ -27,7 +27,7 @@ except:
 	debug = False
 	
 try:
-	netaddr = str(conf['netaddr'] + ".")
+	netaddr = str(conf['net_address'] + ".")
 except:
 	netaddr = "192.168.0."
 
@@ -42,9 +42,19 @@ except:
 	serverport = "3080"
 
 try:
-	linkprotocol = conf['linkprotocol']
+	linkprotocol = conf['link_protocol']
 except:
 	linkprotocol = "tcp"
+
+try: 
+	contconfpath = conf['container_config_path']
+except:
+	contconfpath = "/ion-open-source-4.1.0/ion_config/"
+
+try:
+	ionport = conf['ion_port']
+except:
+	ionport = "4556"
 # END CONFIG FILE
 
 # BEGIN COMMANDLINE INPUT
@@ -154,18 +164,41 @@ for j, node in enumerate(ina):
 	node_accessors[j].start() # start node
 	# assign ips to each interface on node.
 	for iface in node['interfaces']:
-		command=["docker", "exec", "-t", str(node_accessors[j].properties['container_id'])]
+		command=["docker", "exec", "-t", str(node_accessors[j].properties['container_id'])] # MARK-DOCKER-COMMAND
 		command.extend(['ip', 'addr', 'add', str(iface[1]+"/24"), 'dev', iface[0]])
-		subprocess.run(command, stdout=subprocess.DEVNULL)
+		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
 	
-	#./conf_script.sh <nodenum> <numneighbors> <neighbors> nx.ionrc nx.ionconfig nx.ltprc
+	#./conf_script.sh <nodenum> <numneighbors> <neighbors> <input files>
+	# conf_Script replaces all matches of <[xX]> with the node number, and all matches of <[yY]> 
+	# with the line containing that match for each neighbor with the match replaced by each neighbor nodes' number.
 	# TODO: move config directory up a layer to allow access regardless of ion config version.
-	command = ['docker', 'exec', '-t', '-w', '/ion-open-source-4.1.0/ion_config/', str(node_accessors[j].properties['container_id']),
-	'./conf_script.sh', str(node['number']), str(len(node['neighbors']))]
+	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']),
+	'./conf_script.sh', str(node['number']), str(len(node['neighbors']))]  # MARK-DOCKER-COMMAND
 	neighbors = map( lambda x: str(x[0]), node['neighbors'] )
 	command.extend(neighbors)
 	command.extend(['nx.ionrc','nx.ipnrc','nx.bprc'])# currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
-	subprocess.run(command, stdout=subprocess.DEVNULL)
+	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+
+	#TODO: condense these commands together into one command or change to using a command streaming method.
+	for neighbor in node['neighbors']:
+		command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
+		command.append("\"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\"")
+		command.append("nx.bprc")
+		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+		command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
+		command.append("\"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + neighbor[0] + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\"")
+		command.append("nx.ipnrc")
+		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+
+	# TEMP SOLN
+	# TODO: run using a command stream solution, and get a better contact plan default fallback for if the plan is missing.
+	# probably generate a permanent uptime perfect links contact file if none is given.
+	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id'])]
+	subprocess.run([*command, 'ionadmin', 'nx.ionrc'], stdout=subprocess.DEVNULL)	
+	subprocess.run([*command, 'ionadmin', 'contacts.ionrc'], stdout=subprocess.DEVNULL)	# assumes contact plan is supplied on the container.
+	subprocess.run([*command, 'bpadmin', 'nx.bprc'], stdout=subprocess.DEVNULL)	
+	subprocess.run([*command, 'ltpadmin', 'nx.ltprc'], stdout=subprocess.DEVNULL)	
+
 
 # use link information and the matrix of tuples made above to configure the .bprc and .ipnrc files on each node.
 
