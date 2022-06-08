@@ -9,7 +9,7 @@
 # this script is intended and should work if we choose to configure all nodes at runtime when the
 # user has finished building their network, it requires knowledge of it's neighbors and their names
 
-# need to reset config to default before running this script
+# need to reset config to default before running this script (e.g. restart the node)
 
 DEBUG="true"
 
@@ -43,11 +43,6 @@ fi
 # fix the files given.
 for NUM in $(seq $(expr 2 + $NUM_OTHERNODES) $(expr ${#ARGS[@]} - 1 )); do
 	sed -i "s/<[xX]>/$NODENAME/g" ${ARGS[$NUM]}
-	#
-	#lines="$(cat ${ARGS[$NUM]} | grep "<[yY]>" )"
-	#sed -i "s/<[yY]>/$NODENAME/g" ${ARGS[$NUM]}
-	#	echo -e "\n$lines" >> ${ARGS[$NUM]}
-	#	sed -i "s/<[yY]>/$I/g" ${ARGS[$NUM]}
 	for I in ${OTHERNODES[@]}; do
 		awk  "1; gsub(/<[yY]>/,"$I")" ${ARGS[$NUM]} > tmp && mv -f tmp ${ARGS[$NUM]}
 	done
