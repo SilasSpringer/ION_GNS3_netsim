@@ -182,11 +182,11 @@ for j, node in enumerate(ina):
 	#TODO: condense these commands together into one command or change to using a command streaming method.
 	for neighbor in node['neighbors']:
 		command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
-		command.append("\"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\"")
+		command.append("/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo")
 		command.append("nx.bprc")
 		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
 		command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
-		command.append("\"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + neighbor[0] + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\"")
+		command.append("/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport)
 		command.append("nx.ipnrc")
 		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
 
