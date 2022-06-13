@@ -38,6 +38,11 @@ except:
 	serverptcl = "http"
 
 try:
+	serverhost = conf['gns3server']
+except:
+	serverhost = "localhost"
+
+try:
 	serverport = conf['gns3serverport']
 except:
 	serverport = "3080"
@@ -62,15 +67,22 @@ except:
 numargs = len(sys.argv)
 
 # make sure number of given arguments is within acceptable range.
-if numargs > 3 or numargs < 2:
-	sys.exit(str("usage: python3 START_PY_SERVER_1.py <gns3serverhost> <projectname (optional)>\nnum args was " + str(numargs)))
+if numargs < 1:
+	sys.exit(str("usage: python3 START_PY_SERVER_1.py -s <gns3serverhost>  -p <projectname>\nnum args was " + str(numargs)))
 
-serverhost = str(sys.argv[1])
+projectname = None # set default projectname
 
-if numargs == 3:
-	projectname = str(sys.argv[2])
-else:
-	projectname = None
+tmp = iter(sys.argv[1:])
+paired = zip(tmp,tmp)
+for pair in paired:
+	match pair[0]:
+		case "-s":
+			serverhost = pair[1]
+		case "-p":
+			projectname = pair[1]
+		case _:
+			sys.exit(str("usage: python3 START_PY_SERVER_1.py -s <gns3serverhost (optional)>  -p <projectname (optional)>\nnum args was " + str(numargs)))
+
 # END COMMANDLINE INPUT
 
 if debug:
@@ -84,14 +96,6 @@ if projectname is None:
 	for proj in projects:
 		if proj[4] == "opened":
 			projectname = proj[0]
-			project_id = proj[1]
-			break
-# if the project name was supplied, find it in the list of projects on the GNS3 server and record its project ID
-else: 
-	projects = server.projects_summary(is_print=False)
-	for proj in projects:
-		if proj[0] == projectname:
-			project_id = proj[1]
 			break
 # open project and fetch details
 project = gns3fy.Project(name=projectname, connector=server)
@@ -165,48 +169,29 @@ for j, node in enumerate(ina):
 	if node['name'].find('ipn:') == -1:
 		node_accessors[j].update(name=str(node['name'] + "-ipn:" + str(node['number'])))
 	node_accessors[j].start() # start node
-	# assign ips to each interface on node.
-	# for iface in node['interfaces']:
-	# 	command=["docker", "exec", "-t", str(node_accessors[j].properties['container_id'])] # MARK-DOCKER-COMMAND
-	# 	command.extend(['ip', 'addr', 'add', str(iface[1]+"/24"), 'dev', iface[0]])
-	# 	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
-
-	#./conf_script.sh <nodenum> <numneighbors> <neighbors> <input files>
-	# conf_script replaces all matches of <[xX]> with the node number, and all matches of <[yY]> 
-	# with the line containing that match for each neighbor with the match replaced by each neighbor nodes' number.
+	
 	# TODO: move config directory up a layer to allow access regardless of ion config version.
-	# command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']),
-	# './conf_script.sh', str(node['number']), str(len(node['neighbors']))]  # MARK-DOCKER-COMMAND
-	# neighbors = map( lambda x: str(x[0]), node['neighbors'] )
-	# command.extend(neighbors)
-	# command.extend(['nx.ionrc','nx.ipnrc','nx.bprc'])# currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
-	# subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
-
-	#TODO: condense these commands together into one command or change to using a command streaming method.
-	# for neighbor in node['neighbors']:
-	# 	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
-	# 	command.append("/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo")
-	# 	command.append("nx.bprc")
-	# 	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
-	# 	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
-	# 	command.append("/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport)
-	# 	command.append("nx.ipnrc")
-	# 	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
 	command=["docker", "exec", "-t", '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c'] # MARK-DOCKER-COMMAND
 	cmds=""
+	# assign ips to each interface on node.
 	for iface in node['interfaces']:
 		cmds = cmds + "ip addr add " + str(iface[1]+"/24") + " dev " + iface[0]
 		cmds = cmds + " && "
+	# conf_script replaces all matches of <[xX]> with the node number, and all matches of <[yY]> 
+	# with the line containing that match for each neighbor with the match replaced by each neighbor nodes' number.
 	cmds = cmds + "./conf_script.sh " + str(node['number']) + " " + str(len(node['neighbors'])) + " " # MARK-DOCKER-COMMAND
 	neighbors = map( lambda x: str(x[0]), node['neighbors'] )
 	cmds = cmds + " ".join(neighbors)
 	cmds = cmds + " nx.ionrc nx.ipnrc nx.bprc && " # currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
+	# configure the .bprc and .ipnrc config files, adding a plan and outduct for each neighbor of the node
 	for neighbor in node['neighbors']:
 		cmds = cmds + "sed -i /^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo nx.bprc"
 		cmds = cmds + " && "
 		cmds = cmds + "sed -i /^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + " nx.ipnrc"
 		cmds = cmds + " && "
 	cmds = cmds + "ps auxww"
+	
+	# run the commands
 	command.append(cmds)
 	if not debug:
 		subprocess.run(command, stdout=subprocess.DEVNULL)
@@ -214,9 +199,8 @@ for j, node in enumerate(ina):
 		subprocess.run(command)
 
 	
-	# TEMP SOLN
-	# TODO: run using a command stream solution, and get a better contact plan default fallback for if the plan is missing.
-	# probably generate a permanent uptime perfect links contact file if none is given.
+	# TODO: probably generate a permanent uptime perfect links contact file if none is given.
+	# TODO: run these admin commands in-terminal so that they arent ended when the subprocess ends, or try to run them in the background, detached, so they dont terminate when the subprocess ends.
 	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c', 'ionadmin nx.ionrc && ionadmin contacts.ionrc && bpadmin nx.bprc && ltpadmin nx.ltprc']
 	if not debug:
 		subprocess.run(command, stdout=subprocess.DEVNULL)
@@ -242,7 +226,7 @@ if debug:
 	print("project name: ")
 	print(project.name)
 	print("project id: ")
-	print(project_id)
+	print(project.project_id)
 	print("node summary:")
 	print(nodes)
 	print("link summary:")
