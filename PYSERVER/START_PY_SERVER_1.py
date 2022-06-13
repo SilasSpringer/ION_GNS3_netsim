@@ -1,9 +1,10 @@
+import os
 import sys
 import json
 import gns3fy
-
-from tabulate import tabulate
 import subprocess
+from tabulate import tabulate
+
 
 # host and project name need to be specified by user/script.
 
@@ -60,6 +61,7 @@ except:
 # BEGIN COMMANDLINE INPUT
 numargs = len(sys.argv)
 
+# make sure number of given arguments is within acceptable range.
 if numargs > 3 or numargs < 2:
 	sys.exit(str("usage: python3 START_PY_SERVER_1.py <gns3serverhost> <projectname (optional)>\nnum args was " + str(numargs)))
 
@@ -131,23 +133,23 @@ for link in links:
 	#TODO add security checks to make sure that all nodes have correct ips, rather than 
 	# hoping it all works as intended. currently could recieve a loopback ip (127.0.0.1) if the correct ip isnt found.
 	
-	# link is name-iface-name-iface
-	for ix, node in enumerate(ina):
+	# link is name-iface-name-iface (indexes 0,2 are node names, indexes 1,3 are interfaces on their respective nodes.)
+	for ix, node in enumerate(ina): # for each node
 		if node['name'] == link[0]: # if we find the node that is the first node in this link,
-			connected[0] = node['number']
-			for adapter in node['interfaces']:
-				if adapter[0] == link[1]:
-					conn_ips[0] = adapter[1]
+			connected[0] = node['number'] # record its number
+			for adapter in node['interfaces']: # for each interface on the node,
+				if adapter[0] == link[1]:  # if it is the adapter used for this link, 
+					conn_ips[0] = adapter[1] # record the ip address
 					break
 			
-		if node['name'] == link[2]:
-			connected[1] = node['number']
-			for adapter in node['interfaces']:
-				if adapter[0] == link[3]:
-					conn_ips[1] = adapter[1]
+		if node['name'] == link[2]: # if we find the node that is the second node in this link,
+			connected[1] = node['number'] # record its number
+			for adapter in node['interfaces']: # for each interface on the node,
+				if adapter[0] == link[3]: # if it is the adapter used for this link, 
+					conn_ips[1] = adapter[1] # record the ip address
 					break
-	ina[connected[0]-1]['neighbors'].append((connected[1], conn_ips[1]))
-	ina[connected[1]-1]['neighbors'].append((connected[0], conn_ips[0]))
+	ina[connected[0]-1]['neighbors'].append((connected[1], conn_ips[1])) # set the ip address and number of the connected node as a neighbor for the other node
+	ina[connected[1]-1]['neighbors'].append((connected[0], conn_ips[0])) # set the ip address and number of the connected node as a neighbor for the other node
 			
 
 # starts nodes and also runs commands to assign IP addresses on each node for each interface.
@@ -155,6 +157,7 @@ for link in links:
 # shift to opening a pseudoterminal in the node and submitting commands sequentially, 
 # rather than submitting each command separately through its own exec command subprocess
 node_accessors = []
+
 for j, node in enumerate(ina):
 	node_accessors.append(gns3fy.Node(project_id=project.project_id, name=node['name'], connector=server))
 	# temporary solution for adding the IPN numbers to the names of each node as they start. 
@@ -163,41 +166,69 @@ for j, node in enumerate(ina):
 		node_accessors[j].update(name=str(node['name'] + "-ipn:" + str(node['number'])))
 	node_accessors[j].start() # start node
 	# assign ips to each interface on node.
-	for iface in node['interfaces']:
-		command=["docker", "exec", "-t", str(node_accessors[j].properties['container_id'])] # MARK-DOCKER-COMMAND
-		command.extend(['ip', 'addr', 'add', str(iface[1]+"/24"), 'dev', iface[0]])
-		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
-	
+	# for iface in node['interfaces']:
+	# 	command=["docker", "exec", "-t", str(node_accessors[j].properties['container_id'])] # MARK-DOCKER-COMMAND
+	# 	command.extend(['ip', 'addr', 'add', str(iface[1]+"/24"), 'dev', iface[0]])
+	# 	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+
 	#./conf_script.sh <nodenum> <numneighbors> <neighbors> <input files>
-	# conf_Script replaces all matches of <[xX]> with the node number, and all matches of <[yY]> 
+	# conf_script replaces all matches of <[xX]> with the node number, and all matches of <[yY]> 
 	# with the line containing that match for each neighbor with the match replaced by each neighbor nodes' number.
 	# TODO: move config directory up a layer to allow access regardless of ion config version.
-	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']),
-	'./conf_script.sh', str(node['number']), str(len(node['neighbors']))]  # MARK-DOCKER-COMMAND
-	neighbors = map( lambda x: str(x[0]), node['neighbors'] )
-	command.extend(neighbors)
-	command.extend(['nx.ionrc','nx.ipnrc','nx.bprc'])# currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
-	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+	# command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']),
+	# './conf_script.sh', str(node['number']), str(len(node['neighbors']))]  # MARK-DOCKER-COMMAND
+	# neighbors = map( lambda x: str(x[0]), node['neighbors'] )
+	# command.extend(neighbors)
+	# command.extend(['nx.ionrc','nx.ipnrc','nx.bprc'])# currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
+	# subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
 
 	#TODO: condense these commands together into one command or change to using a command streaming method.
+	# for neighbor in node['neighbors']:
+	# 	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
+	# 	command.append("/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo")
+	# 	command.append("nx.bprc")
+	# 	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+	# 	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
+	# 	command.append("/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport)
+	# 	command.append("nx.ipnrc")
+	# 	subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+	command=["docker", "exec", "-t", '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c'] # MARK-DOCKER-COMMAND
+	cmds=""
+	for iface in node['interfaces']:
+		cmds = cmds + "ip addr add " + str(iface[1]+"/24") + " dev " + iface[0]
+		cmds = cmds + " && "
+	cmds = cmds + "./conf_script.sh " + str(node['number']) + " " + str(len(node['neighbors'])) + " " # MARK-DOCKER-COMMAND
+	neighbors = map( lambda x: str(x[0]), node['neighbors'] )
+	cmds = cmds + " ".join(neighbors)
+	cmds = cmds + " nx.ionrc nx.ipnrc nx.bprc && " # currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
 	for neighbor in node['neighbors']:
-		command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
-		command.append("/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo")
-		command.append("nx.bprc")
-		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
-		command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), 'sed', '-i']  # MARK-DOCKER-COMMAND
-		command.append("/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport)
-		command.append("nx.ipnrc")
-		subprocess.run(command, stdout=subprocess.DEVNULL) # MARK-SUBPROCESS
+		cmds = cmds + "sed -i /^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo nx.bprc"
+		cmds = cmds + " && "
+		cmds = cmds + "sed -i /^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + " nx.ipnrc"
+		cmds = cmds + " && "
+	cmds = cmds + "ps auxww"
+	command.append(cmds)
+	if not debug:
+		subprocess.run(command, stdout=subprocess.DEVNULL)
+	else:
+		subprocess.run(command)
 
+	
 	# TEMP SOLN
 	# TODO: run using a command stream solution, and get a better contact plan default fallback for if the plan is missing.
 	# probably generate a permanent uptime perfect links contact file if none is given.
-	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id'])]
-	subprocess.run([*command, 'ionadmin', 'nx.ionrc'], stdout=subprocess.DEVNULL)	
-	subprocess.run([*command, 'ionadmin', 'contacts.ionrc'], stdout=subprocess.DEVNULL)	# assumes contact plan is supplied on the container.
-	subprocess.run([*command, 'bpadmin', 'nx.bprc'], stdout=subprocess.DEVNULL)	
-	subprocess.run([*command, 'ltpadmin', 'nx.ltprc'], stdout=subprocess.DEVNULL)	
+	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c', 'ionadmin nx.ionrc && ionadmin contacts.ionrc && bpadmin nx.bprc && ltpadmin nx.ltprc']
+	if not debug:
+		subprocess.run(command, stdout=subprocess.DEVNULL)
+	else:
+		subprocess.run(command)
+	#subprocess.run([*command, 'ionadmin', 'nx.ionrc'], stdout=subprocess.DEVNULL)	
+	#subprocess.run([*command, 'ionadmin', 'contacts.ionrc'], stdout=subprocess.DEVNULL)	# assumes contact plan is supplied on the container.
+	#subprocess.run([*command, 'bpadmin', 'nx.bprc'], stdout=subprocess.DEVNULL)	
+	#subprocess.run([*command, 'ltpadmin', 'nx.ltprc'], stdout=subprocess.DEVNULL)	
+
+
+		
 
 
 # use link information and the matrix of tuples made above to configure the .bprc and .ipnrc files on each node.
