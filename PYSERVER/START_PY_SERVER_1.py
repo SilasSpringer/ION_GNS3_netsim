@@ -2,9 +2,11 @@ import os
 import sys
 import json
 import gns3fy
+import telnetlib
 import subprocess
 from tabulate import tabulate
 
+from make_contacts import makecontactfile
 
 # host and project name need to be specified by user/script.
 
@@ -55,12 +57,27 @@ except:
 try: 
 	contconfpath = conf['container_config_path']
 except:
-	contconfpath = "/ion-open-source-4.1.0/ion_config/"
+	contconfpath = "/root/ion_config/"
 
 try:
 	ionport = conf['ion_port']
 except:
 	ionport = "4556"
+
+try: 
+	contactfile = conf['contactfile']
+except:
+	contactfile = None
+
+try:
+	universallinkdelay = conf['universallinkdelay']
+except:
+	universallinkdelay = None
+
+try:
+	universallinkbitrate = conf['universallinkbitrate']
+except:
+    universallinkbitrate = None
 # END CONFIG FILE
 
 # BEGIN COMMANDLINE INPUT
@@ -75,11 +92,15 @@ projectname = None # set default projectname
 tmp = iter(sys.argv[1:])
 paired = zip(tmp,tmp)
 for pair in paired:
+	# match-case is exclusive to python3.10+ 
+	# should probably use something else to allow use of older python versions.
 	match pair[0]:
 		case "-s":
 			serverhost = pair[1]
 		case "-p":
 			projectname = pair[1]
+		case "-c":
+			contactfile = pair[1]
 		case _:
 			sys.exit(str("usage: python3 START_PY_SERVER_1.py -s <gns3serverhost (optional)>  -p <projectname (optional)>\nnum args was " + str(numargs)))
 
@@ -155,6 +176,19 @@ for link in links:
 	ina[connected[0]-1]['neighbors'].append((connected[1], conn_ips[1])) # set the ip address and number of the connected node as a neighbor for the other node
 	ina[connected[1]-1]['neighbors'].append((connected[0], conn_ips[0])) # set the ip address and number of the connected node as a neighbor for the other node
 			
+if contactfile == None:
+	contactfile = "contacts.ionrc"
+	contactfile_contents = makecontactfile(ina, contactfile, universallinkbitrate, universallinkdelay)
+else:
+	try:
+		f = open(contactfile, 'r')
+		contactfile_contents = f.read() 
+		f.close()
+	except:
+		print("could not open or read given contacts file. using default permanent uptime contact plan.")
+		contactfile = "contacts.ionrc"
+		contactfile_contents = makecontactfile(ina, contactfile, universallinkbitrate, universallinkdelay)
+
 
 # starts nodes and also runs commands to assign IP addresses on each node for each interface.
 # TODO: potentially shift away from using docker exec to run commands on the nodes, or at least 
@@ -185,9 +219,9 @@ for j, node in enumerate(ina):
 	cmds = cmds + " nx.ionrc nx.ipnrc nx.bprc && " # currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
 	# configure the .bprc and .ipnrc config files, adding a plan and outduct for each neighbor of the node
 	for neighbor in node['neighbors']:
-		cmds = cmds + "sed -i /^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo nx.bprc"
+		cmds = cmds + "sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx.bprc"
 		cmds = cmds + " && "
-		cmds = cmds + "sed -i /^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + " nx.ipnrc"
+		cmds = cmds + "sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx.ipnrc"
 		cmds = cmds + " && "
 	cmds = cmds + "ps auxww"
 	
@@ -201,26 +235,29 @@ for j, node in enumerate(ina):
 	
 	# TODO: probably generate a permanent uptime perfect links contact file if none is given.
 	# TODO: run these admin commands in-terminal so that they arent ended when the subprocess ends, or try to run them in the background, detached, so they dont terminate when the subprocess ends.
-	command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c', 'ionadmin nx.ionrc && ionadmin contacts.ionrc && bpadmin nx.bprc && ltpadmin nx.ltprc']
-	if not debug:
-		subprocess.run(command, stdout=subprocess.DEVNULL)
-	else:
-		subprocess.run(command)
-	#subprocess.run([*command, 'ionadmin', 'nx.ionrc'], stdout=subprocess.DEVNULL)	
-	#subprocess.run([*command, 'ionadmin', 'contacts.ionrc'], stdout=subprocess.DEVNULL)	# assumes contact plan is supplied on the container.
-	#subprocess.run([*command, 'bpadmin', 'nx.bprc'], stdout=subprocess.DEVNULL)	
-	#subprocess.run([*command, 'ltpadmin', 'nx.ltprc'], stdout=subprocess.DEVNULL)	
-
-
-		
-
-
-# use link information and the matrix of tuples made above to configure the .bprc and .ipnrc files on each node.
+	
+	tn = telnetlib.Telnet('127.0.0.1', str(node_accessors[j].console))
+	tn.open('127.0.0.1', str(node_accessors[j].console))
+	tn.write("cd /root/ion_config/\n".encode('utf-8'))
+	
+	tn.write("ionadmin nx.ionrc\n".encode('utf-8'))
+	tn.read_until("Stopping ionadmin.".encode('utf-8'))	
+	tn.write(str("printf \"" + contactfile_contents + "\" | ionadmin\n").encode('utf-8'))
+	tn.read_until("Stopping ionadmin.".encode('utf-8'))	
+	tn.write("bpadmin nx.bprc\n".encode('utf-8'))
+	tn.read_until("Stopping bpadmin.".encode('utf-8'))
+	tn.write("ltpadmin nx.ltprc\n".encode('utf-8'))
+	tn.read_until("Stopping ltpadmin.".encode('utf-8'))
+	tn.close()
+	#command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c', 'cd ~/ion_config/ && ionadmin nx.ionrc && ionadmin printf \"' + contactfile_contents + '\" | ionadmin && bpadmin nx.bprc && ltpadmin nx.ltprc']
+	#if not debug:
+	#	subprocess.run(command, stdout=subprocess.DEVNULL)
+	#else:
+	#	subprocess.run(command)	
 
 # make/edit/upload contact plan file and put on each node then run it.
 
 # start all config files in appropriate admin service (bpadmin, ionadmin, etc.)
-
 
 if debug:
 	print("project name: ")
@@ -233,4 +270,4 @@ if debug:
 	print(links)
 
 	print("\nina - node, adapter, and ip summary table:")
-	print(tabulate(ina))
+	print(ina)

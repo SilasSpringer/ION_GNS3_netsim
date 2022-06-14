@@ -1,5 +1,7 @@
 #!/bin/bash
 
+pyversion="python3.10"
+
 # can pull active project, so this is optional.
 projectname=$1
 
@@ -23,7 +25,7 @@ done
 echo "server host: $host"
 
 # build command to run
-cmd="python3 $serverfile"
+cmd="$pyversion $serverfile"
 if [ $host != "none" ];
 then
 	cmd="$cmd -s $host"	
