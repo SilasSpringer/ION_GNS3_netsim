@@ -28,6 +28,8 @@ RUN sudo make install
 
 RUN sudo ldconfig
 
+WORKDIR /root
+
 # get ping
 RUN apt update
 RUN apt-get install iputils-ping -y
@@ -38,5 +40,3 @@ RUN sudo apt install isc-dhcp-client -y
 
 # clean apt update list.
 RUN rm -rf /var/lib/apt/lists/*
-
-

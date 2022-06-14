@@ -3,5 +3,4 @@ FROM ion_base_image:0.1
 RUN mkdir ion_config
 COPY conf_script.sh ./ion_config/
 RUN chmod +x ./ion_config/conf_script.sh
-COPY contacts.ionrc ./ion_config/
 COPY nx.* ./ion_config/
