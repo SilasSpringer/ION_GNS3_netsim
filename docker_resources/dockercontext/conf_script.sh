@@ -49,3 +49,5 @@ for NUM in $(seq $(expr 2 + $NUM_OTHERNODES) $(expr ${#ARGS[@]} - 1 )); do
 	sed -i "s/<[yY]>/$NODENAME/g" ${ARGS[$NUM]}
 	
 done
+
+echo "conf_script complete"

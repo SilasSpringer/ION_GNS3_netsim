@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import json
 import gns3fy
 import telnetlib
@@ -205,41 +206,30 @@ for j, node in enumerate(ina):
 		node_accessors[j].update(name=str(node['name'] + "-ipn:" + str(node['number'])))
 	node_accessors[j].start() # start node
 	
-	# TODO: move config directory up a layer to allow access regardless of ion config version.
-	command=["docker", "exec", "-t", '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c'] # MARK-DOCKER-COMMAND
-	cmds=""
-	# assign ips to each interface on node.
-	for iface in node['interfaces']:
-		cmds = cmds + "ip addr add " + str(iface[1]+"/24") + " dev " + iface[0]
-		cmds = cmds + " && "
-	# conf_script replaces all matches of <[xX]> with the node number, and all matches of <[yY]> 
-	# with the line containing that match for each neighbor with the match replaced by each neighbor nodes' number.
-	cmds = cmds + "./conf_script.sh " + str(node['number']) + " " + str(len(node['neighbors'])) + " " # MARK-DOCKER-COMMAND
-	neighbors = map( lambda x: str(x[0]), node['neighbors'] )
-	cmds = cmds + " ".join(neighbors)
-	cmds = cmds + " nx.ionrc nx.ipnrc nx.bprc && " # currently unconfigurable files: 'nx.ionconfig' 'nx.ltprc'
-	# configure the .bprc and .ipnrc config files, adding a plan and outduct for each neighbor of the node
-	for neighbor in node['neighbors']:
-		cmds = cmds + "sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx.bprc"
-		cmds = cmds + " && "
-		cmds = cmds + "sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx.ipnrc"
-		cmds = cmds + " && "
-	cmds = cmds + "ps auxww"
-	
-	# run the commands
-	command.append(cmds)
-	if not debug:
-		subprocess.run(command, stdout=subprocess.DEVNULL)
-	else:
-		subprocess.run(command)
+	# inefficient solution trying to avoid a busywait while checking that the node has actually started
+	# TODO: figure out a better  way to wait until the node is up and the console is connected.
+	while node_accessors[j].status == 'stopped':
+		time.sleep(1)
+		
 
-	
-	# TODO: probably generate a permanent uptime perfect links contact file if none is given.
-	# TODO: run these admin commands in-terminal so that they arent ended when the subprocess ends, or try to run them in the background, detached, so they dont terminate when the subprocess ends.
-	
+	# run all the commands needed to configure a node.	
 	tn = telnetlib.Telnet('127.0.0.1', str(node_accessors[j].console))
 	tn.open('127.0.0.1', str(node_accessors[j].console))
+	for iface in node['interfaces']:
+		tn.write(str("ip addr add " + str(iface[1]+"/24") + " dev " + iface[0] + "\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+		
 	tn.write("cd /root/ion_config/\n".encode('utf-8'))
+	tn.read_until("ion_config".encode('utf-8'))
+	tn.write(str("./conf_script.sh "+ str(node['number']) + " " + str(len(node['neighbors'])) +" " + " ".join( map( lambda x: str(x[0]), node['neighbors'] ) ) + " nx.ionrc nx.ipnrc nx.bprc\n" ).encode('utf-8'))
+	tn.read_until("conf_script complete".encode('utf-8'))
+
+	for neighbor in node['neighbors']:
+		tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx.bprc\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+		tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx.ipnrc\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+	tn.read_until("@".encode('utf-8'))
 	
 	tn.write("ionadmin nx.ionrc\n".encode('utf-8'))
 	tn.read_until("Stopping ionadmin.".encode('utf-8'))	
@@ -250,15 +240,6 @@ for j, node in enumerate(ina):
 	tn.write("ltpadmin nx.ltprc\n".encode('utf-8'))
 	tn.read_until("Stopping ltpadmin.".encode('utf-8'))
 	tn.close()
-	#command = ['docker', 'exec', '-t', '-w', contconfpath, str(node_accessors[j].properties['container_id']), '/bin/bash', '-c', 'cd ~/ion_config/ && ionadmin nx.ionrc && ionadmin printf \"' + contactfile_contents + '\" | ionadmin && bpadmin nx.bprc && ltpadmin nx.ltprc']
-	#if not debug:
-	#	subprocess.run(command, stdout=subprocess.DEVNULL)
-	#else:
-	#	subprocess.run(command)	
-
-# make/edit/upload contact plan file and put on each node then run it.
-
-# start all config files in appropriate admin service (bpadmin, ionadmin, etc.)
 
 if debug:
 	print("project name: ")
