@@ -4,7 +4,20 @@
 a scheme ipn 'ipnfw' 'ipnadminep’
 # Add some endpoints
 # a endpoint <endpoint> ‘x’ or ‘q’
-a endpoint ipn:<x>.<y> x
+a endpoint ipn:<x>.1 x
+a endpoint ipn:<x>.2 x
+a endpoint ipn:<x>.3 x
+a endpoint ipn:<x>.4 x
+a endpoint ipn:<x>.5 x
+a endpoint ipn:<x>.6 x
+a endpoint ipn:<x>.7 x
+a endpoint ipn:<x>.8 x
+a endpoint ipn:<x>.9 x
+a endpoint ipn:<x>.10 x
+
+#ENDPOINT_TRIGGER_LINE
+
+
 # Add protocols for external nodes.
 #-----------------------------------------------------------------
 # Estimate transmission capacity assuming 1400 bytes of each frame for payload, and 100 bytes for overhead.
