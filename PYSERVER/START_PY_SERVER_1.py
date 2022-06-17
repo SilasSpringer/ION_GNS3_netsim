@@ -32,7 +32,7 @@ except:
 try:
 	netaddr = str(conf['net_address'] + ".")
 except:
-	netaddr = "192.168.0."
+	netaddr = "192.168."
 
 try:
 	serverptcl = conf['gns3serverptcl']
@@ -137,11 +137,12 @@ ina = []
 for i, node in enumerate(project.nodes):
 	ips = [] # temporary storage array for the ip-adapter pairs 
 	for index, adapter in enumerate(node.ports): # for every adapter in the ports section,
-		if int( str(i+1) + str(index) ) > 255:
-			sys.exit("ERROR: cannot have more than 24 nodes or 10 adapters, as the ip generation method is limited in possibilities. Please reduce your network to meet requirements.")
-		# TODO: use a better method or at least make the mehtod configurable for the way ips are generated to allow for larger networks.
-		ips.append((adapter['name'], str(netaddr + str(i+1) + str(index))))
+		if i+1 > 255 or index > 255:
+			sys.exit("ERROR: cannot have more than 254 nodes or 255 adapters, as the ip generation method is limited in possibilities. Please reduce your network to meet requirements.")
+		# TODO: add ability to exclude specific ip addresses from usable range, to allow connection to outside machines with the same first 2 octets.
+		# first 2 octets of used ip addresses are user specified
 		# calculate a unique IP address for that adapter.	
+		ips.append((adapter['name'], str(netaddr + str(index) + "." + str(i+1))))
 	ina.append({
 		'name' : node.name, 
 		'number' : i+1, 
