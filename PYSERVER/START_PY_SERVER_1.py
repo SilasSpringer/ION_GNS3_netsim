@@ -225,17 +225,17 @@ for j, node in enumerate(ina):
 	tn.read_until("conf_script complete".encode('utf-8'))
 
 	for neighbor in node['neighbors']:
-		tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx.bprc\n").encode('utf-8'))
+		tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
-		tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx.ipnrc\n").encode('utf-8'))
+		tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
 	tn.read_until("@".encode('utf-8'))
 	
-	tn.write("ionadmin nx.ionrc\n".encode('utf-8'))
+	tn.write(str("ionadmin nx" + str(node['number']) + ".ionrc\n").encode('utf-8'))
 	tn.read_until("Stopping ionadmin.".encode('utf-8'))	
 	tn.write(str("printf \"" + contactfile_contents + "\" | ionadmin\n").encode('utf-8'))
 	tn.read_until("Stopping ionadmin.".encode('utf-8'))	
-	tn.write("bpadmin nx.bprc\n".encode('utf-8'))
+	tn.write(str("bpadmin nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
 	tn.read_until("Stopping bpadmin.".encode('utf-8'))
 	tn.write("ltpadmin nx.ltprc\n".encode('utf-8'))
 	tn.read_until("Stopping ltpadmin.".encode('utf-8'))
