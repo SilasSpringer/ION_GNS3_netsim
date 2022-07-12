@@ -224,7 +224,7 @@ for j, node in enumerate(ina):
 		if tmp == -1: # if the bandwidth cap wasnt set for this interface,
 			# TODO: pull rate from contact file
 			# temp soln, use default rate
-			rate = str(universallinkbitrate + "bps")
+			rate = str(universallinkbitrate + "bit")
 		else:	# if it was found, extract value.
 			rate = str(node_env[(tmp+len(str('BANDWIDTH_CAP_' + iface[0])) + 1):])
 			rate = rate.splitlines()[0]
