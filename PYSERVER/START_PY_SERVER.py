@@ -157,6 +157,7 @@ for i, node in enumerate(project.nodes):
 for link in links:
 	connected=[0,0] # store node numbers of connected nodes in this link
 	conn_ips=["127.0.0.1", "127.0.0.1"] # store ip addresses at each end of this link. 
+	conn_ifs=["null", "null"]
 	#TODO add security checks to make sure that all nodes have correct ips, rather than 
 	# hoping it all works as intended. currently could recieve a loopback ip (127.0.0.1) if the correct ip isnt found.
 	
@@ -164,6 +165,7 @@ for link in links:
 	for ix, node in enumerate(ina): # for each node
 		if node['name'] == link[0]: # if we find the node that is the first node in this link,
 			connected[0] = node['number'] # record its number
+			conn_ifs[0] = link[1] # record interface used
 			for adapter in node['interfaces']: # for each interface on the node,
 				if adapter[0] == link[1]:  # if it is the adapter used for this link, 
 					conn_ips[0] = adapter[1] # record the ip address
@@ -171,12 +173,13 @@ for link in links:
 			
 		if node['name'] == link[2]: # if we find the node that is the second node in this link,
 			connected[1] = node['number'] # record its number
+			conn_ifs[1] = link[3] # record interface used
 			for adapter in node['interfaces']: # for each interface on the node,
 				if adapter[0] == link[3]: # if it is the adapter used for this link, 
 					conn_ips[1] = adapter[1] # record the ip address
 					break
-	ina[connected[0]-1]['neighbors'].append((connected[1], conn_ips[1])) # set the ip address and number of the connected node as a neighbor for the other node
-	ina[connected[1]-1]['neighbors'].append((connected[0], conn_ips[0])) # set the ip address and number of the connected node as a neighbor for the other node
+	ina[connected[0]-1]['neighbors'].append((connected[1], conn_ips[1], conn_ifs[1])) # set the ip address and number of the connected node as a neighbor for the other node
+	ina[connected[1]-1]['neighbors'].append((connected[0], conn_ips[0], conn_ifs[0])) # set the ip address and number of the connected node as a neighbor for the other node
 			
 if contactfile == None:
 	contactfile = "contacts.ionrc"
@@ -211,14 +214,42 @@ for j, node in enumerate(ina):
 	while node_accessors[j].status == 'stopped':
 		time.sleep(1)
 		
+	node_env = str(node_accessors[j].properties['environment'])
 
 	# run all the commands needed to configure a node.	
 	tn = telnetlib.Telnet('127.0.0.1', str(node_accessors[j].console))
 	tn.open('127.0.0.1', str(node_accessors[j].console))
 	for iface in node['interfaces']:
-		tn.write(str("ip addr add " + str(iface[1]+"/24") + " dev " + iface[0] + "\n").encode('utf-8'))
-		tn.read_until("@".encode('utf-8'))
+		tmp = node_env.find('BANDWIDTH_CAP_' + iface[0])
+		if tmp == -1: # if the bandwidth cap wasnt set for this interface,
+			# TODO: pull rate from contact file
+			# temp soln, use default rate
+			rate = str(universallinkbitrate + "bps")
+		else:	# if it was found, extract value.
+			rate = str(node_env[(tmp+len(str('BANDWIDTH_CAP_' + iface[0])) + 1):])
+			rate = rate.splitlines()[0]
 		
+		address = "127.0.0.1"
+
+		for neighbor in node['neighbors']:
+			if iface[0] == neighbor[2]: # find the neighbor connected on this interface
+				address = neighbor[1] # save the ip address of that neighbor
+				break # exit loop.
+		
+		if debug:
+			print(str(rate + "\n"))
+			print(str(address + "\n"))
+		
+		tn.read_until("@".encode('utf-8'))
+		if address != "127.0.0.1":
+			tn.write(str("ip addr add " + str(iface[1]+"/24") + " dev " + iface[0] + "\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
+			tn.write(str("tc qdisc add dev " + iface[0] + " root handle 1:0 htb default 30\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
+			tn.write(str("tc class add dev " + iface[0] + " parent 1:0 classid 1:1 htb rate " + rate + "\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
+			tn.write(str("tc filter add dev " + iface[0] + " protocol ip parent 1:0 prio 1 u32 match ip dst " + address + " flowid 1:1\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
 	tn.write("cd /root/ion_config/\n".encode('utf-8'))
 	tn.read_until("ion_config".encode('utf-8'))
 	tn.write(str("./conf_script.sh "+ str(node['number']) + " " + str(len(node['neighbors'])) +" " + " ".join( map( lambda x: str(x[0]), node['neighbors'] ) ) + " nx.ionrc nx.ipnrc nx.bprc\n" ).encode('utf-8'))
