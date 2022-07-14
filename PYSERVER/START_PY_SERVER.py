@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import json
 import gns3fy
 import telnetlib
@@ -53,7 +52,7 @@ except:
 try:
 	linkprotocol = conf['link_protocol']
 except:
-	linkprotocol = "tcp"
+	linkprotocol = "udp"
 
 try: 
 	contconfpath = conf['container_config_path']
@@ -86,7 +85,7 @@ numargs = len(sys.argv)
 
 # make sure number of given arguments is within acceptable range.
 if numargs < 1:
-	sys.exit(str("usage: python3 START_PY_SERVER_1.py -s <gns3serverhost>  -p <projectname>\nnum args was " + str(numargs)))
+	sys.exit(str("usage: python3 START_PY_SERVER_1.py -s <gns3serverhost>  -p <projectname> -ptcl <serverprotocol> -port <serverport>\nnum args was " + str(numargs)))
 
 projectname = None # set default projectname
 
@@ -98,6 +97,10 @@ for pair in paired:
 	match pair[0]:
 		case "-s":
 			serverhost = pair[1]
+		case "-port":
+			serverport = pair[1]
+		case "-ptcl":
+			serverptcl = pair[1]
 		case "-p":
 			projectname = pair[1]
 		case "-c":
@@ -209,11 +212,10 @@ for j, node in enumerate(ina):
 		node_accessors[j].update(name=str(node['name'] + "-ipn:" + str(node['number'])))
 	node_accessors[j].start() # start node
 	
-	# inefficient solution trying to avoid a busywait while checking that the node has actually started
-	# TODO: figure out a better  way to wait until the node is up and the console is connected.
+	# wait until node has started.
 	while node_accessors[j].status == 'stopped':
-		time.sleep(1)
-		
+		pass
+
 	node_env = str(node_accessors[j].properties['environment'])
 
 	# run all the commands needed to configure a node.	
@@ -222,9 +224,11 @@ for j, node in enumerate(ina):
 	for iface in node['interfaces']:
 		tmp = node_env.find('BANDWIDTH_CAP_' + iface[0])
 		if tmp == -1: # if the bandwidth cap wasnt set for this interface,
-			# TODO: pull rate from contact file
+			# TODO: pull rate from contact file - may be tricky since this is dependent on contact time. 
+			# should be done/updated in a daemon or server running on the host that can monitor and update all nodes as needed to have one common clock controlling the delays.
+			
 			# temp soln, use default rate
-			rate = str(universallinkbitrate + "bit")
+			rate = str(universallinkbitrate + "bps")
 		else:	# if it was found, extract value.
 			rate = str(node_env[(tmp+len(str('BANDWIDTH_CAP_' + iface[0])) + 1):])
 			rate = rate.splitlines()[0]
@@ -241,7 +245,7 @@ for j, node in enumerate(ina):
 			print(str(address + "\n"))
 		
 		tn.read_until("@".encode('utf-8'))
-		if address != "127.0.0.1":
+		if address != "127.0.0.1": # only set an ip address and add qdiscs to interfaces that are being used. 
 			tn.write(str("ip addr add " + str(iface[1]+"/24") + " dev " + iface[0] + "\n").encode('utf-8'))
 			tn.read_until("@".encode('utf-8'))
 			tn.write(str("tc qdisc add dev " + iface[0] + " root handle 1:0 htb default 30\n").encode('utf-8'))
@@ -250,6 +254,7 @@ for j, node in enumerate(ina):
 			tn.read_until("@".encode('utf-8'))
 			tn.write(str("tc filter add dev " + iface[0] + " protocol ip parent 1:0 prio 1 u32 match ip dst " + address + " flowid 1:1\n").encode('utf-8'))
 			tn.read_until("@".encode('utf-8'))
+		
 	tn.write("cd /root/ion_config/\n".encode('utf-8'))
 	tn.read_until("ion_config".encode('utf-8'))
 	tn.write(str("./conf_script.sh "+ str(node['number']) + " " + str(len(node['neighbors'])) +" " + " ".join( map( lambda x: str(x[0]), node['neighbors'] ) ) + " nx.ionrc nx.ipnrc nx.bprc\n" ).encode('utf-8'))
