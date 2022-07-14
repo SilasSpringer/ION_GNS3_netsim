@@ -240,12 +240,11 @@ for j, node in enumerate(ina):
 				address = neighbor[1] # save the ip address of that neighbor
 				break # exit loop.
 		
-		if debug:
-			print(str(rate + "\n"))
-			print(str(address + "\n"))
-		
 		tn.read_until("@".encode('utf-8'))
 		if address != "127.0.0.1": # only set an ip address and add qdiscs to interfaces that are being used. 
+			if debug:
+				print(rate)
+				print(address)
 			tn.write(str("ip addr add " + str(iface[1]+"/24") + " dev " + iface[0] + "\n").encode('utf-8'))
 			tn.read_until("@".encode('utf-8'))
 			tn.write(str("tc qdisc add dev " + iface[0] + " root handle 1:0 htb default 30\n").encode('utf-8'))
