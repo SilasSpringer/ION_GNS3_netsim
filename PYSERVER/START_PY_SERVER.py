@@ -8,8 +8,16 @@ from tabulate import tabulate
 
 from make_contacts import makecontactfile
 
-# host and project name need to be specified by user/script.
+FILENAME="START_PY_SERVER.py"
 
+def print_help():
+	print("usage: python[3.X] " + FILENAME + " -[s|c|m|port|ptcl|proj] [ARGUMENT]...")
+	print("		m   	| Use following argument as the running mode. For more info, see the help for START_SERVER.sh")
+	print("		c   	| Use following argument as the path to the contact file")
+	print("		s   	| Use following argument as server hostname")
+	print("		proj 	| Use following argument as the GNS3 project name")
+	print("		port	| Use following argument as the server port number")
+	print("		ptcl 	| Use following argument as the server protocol.")
 
 # BEGIN CONFIG FILE
 
@@ -78,16 +86,18 @@ try:
 	universallinkbitrate = conf['universallinkbitrate']
 except:
     universallinkbitrate = None
+
+try:
+	tc_bandwidth_limiting = conf['tc_bandwidth_limiting']
+except:
+	tc_bandwidth_limiting = "default"
 # END CONFIG FILE
 
 # BEGIN COMMANDLINE INPUT
 numargs = len(sys.argv)
 
-# make sure number of given arguments is within acceptable range.
-if numargs < 1:
-	sys.exit(str("usage: python3 START_PY_SERVER_1.py -s <gns3serverhost>  -p <projectname> -ptcl <serverprotocol> -port <serverport>\nnum args was " + str(numargs)))
-
 projectname = None # set default projectname
+runningmode = None # set default running mode
 
 tmp = iter(sys.argv[1:])
 paired = zip(tmp,tmp)
@@ -101,12 +111,15 @@ for pair in paired:
 			serverport = pair[1]
 		case "-ptcl":
 			serverptcl = pair[1]
-		case "-p":
+		case "-proj":
 			projectname = pair[1]
 		case "-c":
 			contactfile = pair[1]
+		case "-m":
+			runningmode = pair[1]
 		case _:
-			sys.exit(str("usage: python3 START_PY_SERVER_1.py -s <gns3serverhost (optional)>  -p <projectname (optional)>\nnum args was " + str(numargs)))
+			print_help()
+			sys.exit(str("invalid option: " + str(pair[0])))
 
 # END COMMANDLINE INPUT
 
@@ -142,7 +155,7 @@ for i, node in enumerate(project.nodes):
 	ips = [] # temporary storage array for the ip-adapter pairs 
 	for index, adapter in enumerate(node.ports): # for every adapter in the ports section,
 		if i+1 > 255 or index > 255:
-			sys.exit("ERROR: cannot have more than 254 nodes or 255 adapters, as the ip generation method is limited in possibilities. Please reduce your network to meet requirements.")
+			sys.exit("ERROR: cannot have more than 254 nodes or 255 adapters, as the ip generation method is limited in possibilities. Please reduce network to meet requirements.")
 		# TODO: add ability to exclude specific ip addresses from usable range, to allow connection to outside machines with the same first 2 octets.
 		# first 2 octets of used ip addresses are user specified
 		# calculate a unique IP address for that adapter.	
@@ -183,7 +196,7 @@ for link in links:
 					break
 	ina[connected[0]-1]['neighbors'].append((connected[1], conn_ips[1], conn_ifs[1])) # set the ip address and number of the connected node as a neighbor for the other node
 	ina[connected[1]-1]['neighbors'].append((connected[0], conn_ips[0], conn_ifs[0])) # set the ip address and number of the connected node as a neighbor for the other node
-			
+	
 if contactfile == None:
 	contactfile = "contacts.ionrc"
 	contactfile_contents = makecontactfile(ina, contactfile, universallinkbitrate, universallinkdelay)
@@ -247,23 +260,42 @@ for j, node in enumerate(ina):
 				print(address)
 			tn.write(str("ip addr add " + str(iface[1]+"/24") + " dev " + iface[0] + "\n").encode('utf-8'))
 			tn.read_until("@".encode('utf-8'))
-			tn.write(str("tc qdisc add dev " + iface[0] + " root handle 1:0 htb default 30\n").encode('utf-8'))
-			tn.read_until("@".encode('utf-8'))
-			tn.write(str("tc class add dev " + iface[0] + " parent 1:0 classid 1:1 htb rate " + rate + "\n").encode('utf-8'))
-			tn.read_until("@".encode('utf-8'))
-			tn.write(str("tc filter add dev " + iface[0] + " protocol ip parent 1:0 prio 1 u32 match ip dst " + address + " flowid 1:1\n").encode('utf-8'))
-			tn.read_until("@".encode('utf-8'))
+			if tc_bandwidth_limiting == "default":
+				tn.write(str("tc qdisc add dev " + iface[0] + " root handle 1:0 htb default 30\n").encode('utf-8'))
+				tn.read_until("@".encode('utf-8'))
+				tn.write(str("tc class add dev " + iface[0] + " parent 1:0 classid 1:1 htb rate " + rate + "\n").encode('utf-8'))
+				tn.read_until("@".encode('utf-8'))
+				tn.write(str("tc filter add dev " + iface[0] + " protocol ip parent 1:0 prio 1 u32 match ip dst " + address + " flowid 1:1\n").encode('utf-8'))
+				tn.read_until("@".encode('utf-8'))
 		
-	tn.write("cd /root/ion_config/\n".encode('utf-8'))
-	tn.read_until("ion_config".encode('utf-8'))
+	tn.write(str("cd " + contconfpath +"\n").encode('utf-8'))
+	tn.read_until(contconfpath.encode('utf-8'))
 	tn.write(str("./conf_script.sh "+ str(node['number']) + " " + str(len(node['neighbors'])) +" " + " ".join( map( lambda x: str(x[0]), node['neighbors'] ) ) + " nx.ionrc nx.ipnrc nx.bprc\n" ).encode('utf-8'))
 	tn.read_until("conf_script complete".encode('utf-8'))
 
-	for neighbor in node['neighbors']:
-		tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
+	for neighbor in node['neighbors']:		
+		if( linkprotocol == 'ltp' ):
+			tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + str(neighbor[0]) + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
+
+			#TEMP - add LTP outbound loopback
+			tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + str(node['number']) + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
+			
+			tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + str(neighbor[0]) + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
+		else:
+			tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
+			tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
-		tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
+		
+		tn.write(str("touch nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
+		tn.write(str("cp nx.ltprc nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+		tn.write(str("sed -i \"/^\#SPAN_TRIGGER_LINE/a" + "a span " + str(neighbor[0]) + " 100 100 64000 100000 1 \'udplso " + neighbor[1] + ":1113 40000000\' \" nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+
 	tn.read_until("@".encode('utf-8'))
 	
 	tn.write(str("ionadmin nx" + str(node['number']) + ".ionrc\n").encode('utf-8'))
@@ -272,9 +304,12 @@ for j, node in enumerate(ina):
 	tn.read_until("Stopping ionadmin.".encode('utf-8'))	
 	tn.write(str("bpadmin nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
 	tn.read_until("Stopping bpadmin.".encode('utf-8'))
-	tn.write("ltpadmin nx.ltprc\n".encode('utf-8'))
+	tn.write(str("ltpadmin nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
 	tn.read_until("Stopping ltpadmin.".encode('utf-8'))
 	tn.close()
+
+# TODO: implement running modes.
+
 
 if debug:
 	print("project name: ")
