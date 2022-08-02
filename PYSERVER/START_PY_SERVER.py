@@ -7,6 +7,7 @@ import subprocess
 from tabulate import tabulate
 
 from make_contacts import makecontactfile
+from make_contacts import makeoscillatorycontactfile
 
 FILENAME="START_PY_SERVER.py"
 
@@ -228,6 +229,18 @@ else:
 		f = open(contactfile, 'r')
 		contactfile_contents = f.read() 
 		f.close()
+	except:
+		pass
+	try:
+		match contactfile.split(" ")[0]:
+			case "default":
+				if (debug):
+					print("making default permanent uptime contact file.")
+				contactfile_contents = makecontactfile(ina, contactfile, universallinkbitrate, universallinkdelay)
+			case "oscillatory": # TODO: update this to read in config for the length of oscillations and the total number of oscillations.
+				if (debug):
+					print("making oscillatory contact file. osc rate and cycle count config NYI.")
+				contactfile_contents = makeoscillatorycontactfile(ina, contactfile, 10, 10, universallinkbitrate, universallinkdelay)
 	except:
 		print("could not open or read given contacts file. using default permanent uptime contact plan.")
 		contactfile = "contacts.ionrc"
