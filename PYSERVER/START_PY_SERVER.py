@@ -6,8 +6,7 @@ import telnetlib
 import subprocess
 from tabulate import tabulate
 
-from make_contacts import makecontactfile
-from make_contacts import makeoscillatorycontactfile
+from make_contacts import *
 
 FILENAME="START_PY_SERVER.py"
 
@@ -190,7 +189,7 @@ for i, node in enumerate(project.nodes):
 		'index' : i
 		})
 
-# TODO: clean this up to be more efficient, maybe use a hashmap to store the modes for faster lookup?
+# TODO: clean this up to be more efficient, maybe use a hashmap to store the nodes for faster lookup?
 for link in links:
 	connected=[0,0] # store node numbers of connected nodes in this link
 	indices=[0,0] # store indices of connected nodes in this link
@@ -301,25 +300,29 @@ for j, node in enumerate(ina):
 	tn.read_until("conf_script complete".encode('utf-8'))
 
 	for neighbor in node['neighbors']:		
-		if (linkprotocol == 'ltp'):
+		if (linkprotocol == 'ltp'): # if using ltp, destination is the neighbor node's number
 			dest = str(neighbor[0])
-		else:
+		else: # otherwise, the destination is the neighbor node's IP address.
 			dest = str(neighbor[1] + ":" + ionport)
 
+		# write outducts and plans to for each neighbor.
 		tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + dest + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
 		tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + dest + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
 		
+		# update the ltprc file to be named correctly, and add a span if using ltp.
 		tn.write(str("touch nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
 		tn.write(str("cp nx.ltprc nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
-		tn.write(str("sed -i \"/^\#SPAN_TRIGGER_LINE/a" + "a span " + str(neighbor[0]) + " 100 100 64000 100000 1 \'udplso " + neighbor[1] + ":1113 40000000\' \" nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
-		tn.read_until("@".encode('utf-8'))
+		if (linkprotocol == 'ltp'):
+			tn.write(str("sed -i \"/^\#SPAN_TRIGGER_LINE/a" + "a span " + str(neighbor[0]) + " 100 100 64000 100000 1 \'udplso " + neighbor[1] + ":1113 40000000\' \" nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
+			tn.read_until("@".encode('utf-8'))
 
 	tn.read_until("@".encode('utf-8'))
 	
+	# start all the configuration files on the node.
 	tn.write(str("ionadmin nx" + str(node['number']) + ".ionrc\n").encode('utf-8'))
 	tn.read_until("Stopping ionadmin.".encode('utf-8'))	
 	tn.write(str("printf \"" + contactfile_contents + "\" | ionadmin\n").encode('utf-8'))
@@ -328,6 +331,8 @@ for j, node in enumerate(ina):
 	tn.read_until("Stopping bpadmin.".encode('utf-8'))
 	tn.write(str("ltpadmin nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
 	tn.read_until("Stopping ltpadmin.".encode('utf-8'))
+
+	# close telnet terminal connection. temrinal remains open for the user, however.
 	tn.close()
 
 # TODO: implement running modes.
