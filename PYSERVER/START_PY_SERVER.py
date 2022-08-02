@@ -150,30 +150,51 @@ links	= project.links_summary(is_print=False)
 # ina - ip, nodename, adapter - contains a list of all nodes, 
 # where each node is represented by a pair that has the node name, 
 # and an array containing pairs matching each interface to an ip address.
-ina = [] 
+ina = []
+
+node_accessors = []
+
+#TODO redo the mechanism using used node numbers to find any number 
+# remaining in the allowable node number range. currently relies on 
+# having a larger number than the given number available in the range 0-255.
+# which is a bad assumption to make
+used_node_numbers = []
+
 for i, node in enumerate(project.nodes):
+	nmbr = i+1
+	node_accessors.append(gns3fy.Node(project_id=project.project_id, name=node.name, connector=server))
+	# temporary solution for adding the IPN numbers to the names of each node as they start. 
+	# TODO: update this to read the ipn number from the title if it exists, so the user can specify ipn numbers.
+	if 'ipn:' not in node.name:
+		while nmbr in used_node_numbers:
+			nmbr += 1
+		node_accessors[i].update(name=str(node.name + "-ipn:" + str(nmbr)))
+	else:
+		nmbr = int(node.name[node.name.find('ipn:')+len('ipn:'):])
+	
 	ips = [] # temporary storage array for the ip-adapter pairs 
 	for index, adapter in enumerate(node.ports): # for every adapter in the ports section,
-		if i+1 > 255 or index > 255:
-			sys.exit("ERROR: cannot have more than 254 nodes or 255 adapters, as the ip generation method is limited in possibilities. Please reduce network to meet requirements.")
+		if nmbr > 255 or index > 255:
+			sys.exit("ERROR: cannot have more than 254 nodes or 255 adapters or nodes with ipn numbers outside the range 0-255, as the ip generation method is limited in possibilities. Please reduce network to meet requirements.")
 		# TODO: add ability to exclude specific ip addresses from usable range, to allow connection to outside machines with the same first 2 octets.
 		# first 2 octets of used ip addresses are user specified
 		# calculate a unique IP address for that adapter.	
-		ips.append((adapter['name'], str(netaddr + str(index) + "." + str(i+1))))
+		ips.append((adapter['name'], str(netaddr + str(index) + "." + str(nmbr))))
+	used_node_numbers.append(nmbr)
 	ina.append({
 		'name' : node.name, 
-		'number' : i+1, 
+		'number' : nmbr, 
 		'interfaces' : ips, 
-		'neighbors' : [] 
+		'neighbors' : [],
+		'index' : i
 		})
-	
-
 
 # TODO: clean this up to be more efficient, maybe use a hashmap to store the modes for faster lookup?
 for link in links:
 	connected=[0,0] # store node numbers of connected nodes in this link
+	indices=[0,0] # store indices of connected nodes in this link
 	conn_ips=["127.0.0.1", "127.0.0.1"] # store ip addresses at each end of this link. 
-	conn_ifs=["null", "null"]
+	conn_ifs=["null", "null"] # store name of the interface used on each side of the link.
 	#TODO add security checks to make sure that all nodes have correct ips, rather than 
 	# hoping it all works as intended. currently could recieve a loopback ip (127.0.0.1) if the correct ip isnt found.
 	
@@ -181,6 +202,7 @@ for link in links:
 	for ix, node in enumerate(ina): # for each node
 		if node['name'] == link[0]: # if we find the node that is the first node in this link,
 			connected[0] = node['number'] # record its number
+			indices[0] = node['index']
 			conn_ifs[0] = link[1] # record interface used
 			for adapter in node['interfaces']: # for each interface on the node,
 				if adapter[0] == link[1]:  # if it is the adapter used for this link, 
@@ -189,13 +211,14 @@ for link in links:
 			
 		if node['name'] == link[2]: # if we find the node that is the second node in this link,
 			connected[1] = node['number'] # record its number
+			indices[1] = node['index']
 			conn_ifs[1] = link[3] # record interface used
 			for adapter in node['interfaces']: # for each interface on the node,
 				if adapter[0] == link[3]: # if it is the adapter used for this link, 
 					conn_ips[1] = adapter[1] # record the ip address
 					break
-	ina[connected[0]-1]['neighbors'].append((connected[1], conn_ips[1], conn_ifs[1])) # set the ip address and number of the connected node as a neighbor for the other node
-	ina[connected[1]-1]['neighbors'].append((connected[0], conn_ips[0], conn_ifs[0])) # set the ip address and number of the connected node as a neighbor for the other node
+	ina[indices[0]]['neighbors'].append((connected[1], conn_ips[1], conn_ifs[1])) # set the ip address and number of the connected node as a neighbor for the other node
+	ina[indices[1]]['neighbors'].append((connected[0], conn_ips[0], conn_ifs[0])) # set the ip address and number of the connected node as a neighbor for the other node
 	
 if contactfile == None:
 	contactfile = "contacts.ionrc"
@@ -211,18 +234,8 @@ else:
 		contactfile_contents = makecontactfile(ina, contactfile, universallinkbitrate, universallinkdelay)
 
 
-# starts nodes and also runs commands to assign IP addresses on each node for each interface.
-# TODO: potentially shift away from using docker exec to run commands on the nodes, or at least 
-# shift to opening a pseudoterminal in the node and submitting commands sequentially, 
-# rather than submitting each command separately through its own exec command subprocess
-node_accessors = []
-
+# starts and configures nodes.
 for j, node in enumerate(ina):
-	node_accessors.append(gns3fy.Node(project_id=project.project_id, name=node['name'], connector=server))
-	# temporary solution for adding the IPN numbers to the names of each node as they start. 
-	# TODO: update this to read the ipn number from the title if it exists, so the user can specify ipn numbers.
-	if node['name'].find('ipn:') == -1:
-		node_accessors[j].update(name=str(node['name'] + "-ipn:" + str(node['number'])))
 	node_accessors[j].start() # start node
 	
 	# wait until node has started.
@@ -238,9 +251,10 @@ for j, node in enumerate(ina):
 		tmp = node_env.find('BANDWIDTH_CAP_' + iface[0])
 		if tmp == -1: # if the bandwidth cap wasnt set for this interface,
 			# TODO: pull rate from contact file - may be tricky since this is dependent on contact time. 
-			# should be done/updated in a daemon or server running on the host that can monitor and update all nodes as needed to have one common clock controlling the delays.
+			# should be done/updated in a daemon or server running on the host that can monitor and update 
+			# all nodes as needed to have one common clock controlling the delays.
 			
-			# temp soln, use default rate
+			# temp soln, use default rate from configuration. this is also used in creating a default contact file if one is not provided.
 			rate = str(universallinkbitrate + "bps")
 		else:	# if it was found, extract value.
 			rate = str(node_env[(tmp+len(str('BANDWIDTH_CAP_' + iface[0])) + 1):])
@@ -274,19 +288,14 @@ for j, node in enumerate(ina):
 	tn.read_until("conf_script complete".encode('utf-8'))
 
 	for neighbor in node['neighbors']:		
-		if( linkprotocol == 'ltp' ):
-			tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + str(neighbor[0]) + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
-			tn.read_until("@".encode('utf-8'))
-
-			#TEMP - add LTP outbound loopback
-			tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + str(node['number']) + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
-			tn.read_until("@".encode('utf-8'))
-			
-			tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + str(neighbor[0]) + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
+		if (linkprotocol == 'ltp'):
+			dest = str(neighbor[0])
 		else:
-			tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + neighbor[1] + ":" + ionport + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
-			tn.read_until("@".encode('utf-8'))
-			tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + neighbor[1] + ":" + ionport + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
+			dest = str(neighbor[1] + ":" + ionport)
+
+		tn.write(str("sed -i \"/^\#OUTDUCT_TRIGGER_LINE/a" + "a outduct " + linkprotocol + " " + dest + " " + linkprotocol + "clo\" nx" + str(node['number']) + ".bprc\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+		tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + dest + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
 		
 		tn.write(str("touch nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
