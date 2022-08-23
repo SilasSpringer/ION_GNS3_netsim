@@ -299,6 +299,13 @@ for j, node in enumerate(ina):
 	tn.write(str("./conf_script.sh "+ str(node['number']) + " " + str(len(node['neighbors'])) +" " + " ".join( map( lambda x: str(x[0]), node['neighbors'] ) ) + " nx.ionrc nx.ipnrc nx.bprc\n" ).encode('utf-8'))
 	tn.read_until("conf_script complete".encode('utf-8'))
 
+	#TODO: place this into the conf_script file to make a nx#.ltprc file regardless of whether we use ltp or not, for safety and futureproofing.
+	if (linkprotocol == 'ltp'):	# update the ltprc file to be named correctly if using ltp.
+		tn.write(str("touch nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+		tn.write(str("cp nx.ltprc nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
+		tn.read_until("@".encode('utf-8'))
+
 	for neighbor in node['neighbors']:		
 		if (linkprotocol == 'ltp'): # if using ltp, destination is the neighbor node's number
 			dest = str(neighbor[0])
@@ -310,12 +317,7 @@ for j, node in enumerate(ina):
 		tn.read_until("@".encode('utf-8'))
 		tn.write(str("sed -i \"/^\#PLAN_TRIGGER_LINE/a" + "a plan " + str(neighbor[0]) + " " + linkprotocol + "/" + dest + "\" nx" + str(node['number']) + ".ipnrc\n").encode('utf-8'))
 		tn.read_until("@".encode('utf-8'))
-		
-		# update the ltprc file to be named correctly, and add a span if using ltp.
-		tn.write(str("touch nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
-		tn.read_until("@".encode('utf-8'))
-		tn.write(str("cp nx.ltprc nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
-		tn.read_until("@".encode('utf-8'))
+		# output a span if using ltp.
 		if (linkprotocol == 'ltp'):
 			tn.write(str("sed -i \"/^\#SPAN_TRIGGER_LINE/a" + "a span " + str(neighbor[0]) + " 100 100 64000 100000 1 \'udplso " + neighbor[1] + ":1113 40000000\' \" nx" + str(node['number']) + ".ltprc\n").encode('utf-8'))
 			tn.read_until("@".encode('utf-8'))
