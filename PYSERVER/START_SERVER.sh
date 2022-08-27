@@ -13,10 +13,11 @@ cmd="${pyversion} ${serverfile}"
 
 # process commandline inputs.
 # valid options are -[p|m|h] to set project name, running mode, and help menu respectively.
-while getopts ":p:m:h:" option; do
+while getopts ":p:m:c:h:" option; do
    case $option in
       p) cmd="${cmd} -proj ${OPTARG}";;
       m) cmd="${cmd} -m ${OPTARG}";;
+	  c) cmd="${cmd} -c ${OPTARG}";;
 	  h) help;;
    esac
 done
