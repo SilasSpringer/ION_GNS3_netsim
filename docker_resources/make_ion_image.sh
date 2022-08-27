@@ -4,7 +4,9 @@
 
 cd dockercontext/
 
-docker build -t sspringe/ion_node_ubuntu_latest:1.1 .
+NAME="sspringe/ion_node_ubuntu_latest"
+VERSION="1.1"
 
-echo "2-node image built and tagged as ion_2node:1.0"
-echo "base ion image built and tagged as ion_base_image:0.1"
+docker build -t ${NAME}:${VERSION} .
+
+echo "ion image built and tagged as ${NAME}:${VERSION}"
