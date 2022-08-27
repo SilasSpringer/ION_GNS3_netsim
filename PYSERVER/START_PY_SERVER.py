@@ -227,6 +227,8 @@ else:
 	try:
 		f = open(contactfile, 'r')
 		contactfile_contents = f.read() 
+		if (debug):
+			print(str("contactfile: " + contactfile + " contained: \n" + contactfile_contents + "\n"))
 		f.close()
 	except:
 		pass
@@ -267,7 +269,7 @@ for j, node in enumerate(ina):
 			# all nodes as needed to have one common clock controlling the delays.
 			
 			# temp soln, use default rate from configuration. this is also used in creating a default contact file if one is not provided.
-			rate = str(universallinkbitrate + "bps")
+			rate = str(universallinkbitrate + "bit")
 		else:	# if it was found, extract value.
 			rate = str(node_env[(tmp+len(str('BANDWIDTH_CAP_' + iface[0])) + 1):])
 			rate = rate.splitlines()[0]
