@@ -15,6 +15,7 @@
 # LSO_command
 # [queuing_latency]
 # e.g. a span <PEER_NUM> 100 100 64000 100000 1 'udplso x.x.x.x:1113 40000000’
+#SPAN_TRIGGER_LINE
 #-----------------------------------------------------------------
 # Listener on 0.0.0.0
 # s 'udplsi 0.0.0.0:1113'
