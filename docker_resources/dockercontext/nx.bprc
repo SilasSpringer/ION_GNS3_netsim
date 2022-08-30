@@ -4,6 +4,7 @@
 a scheme ipn 'ipnfw' 'ipnadminep’
 # Add some endpoints
 # a endpoint <endpoint> ‘x’ or ‘q’
+a endpoint ipn:<x>.0 x
 a endpoint ipn:<x>.1 x
 a endpoint ipn:<x>.2 x
 a endpoint ipn:<x>.3 x
