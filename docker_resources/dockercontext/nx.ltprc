@@ -18,7 +18,8 @@
 #SPAN_TRIGGER_LINE
 #-----------------------------------------------------------------
 # Listener on 0.0.0.0
-# s 'udplsi 0.0.0.0:1113'
+s 'udplsi 0.0.0.0:1113'
+
 w 1
 
 # TODO: add config option for watch characters.
