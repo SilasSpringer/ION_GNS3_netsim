@@ -127,6 +127,7 @@ for pair in paired:
 if debug:
 	print("server is: " + serverptcl + "://" + serverhost + ":" + serverport)
 
+
 server	= gns3fy.Gns3Connector(serverptcl + "://" + serverhost + ":" + serverport)
 
 # get the active project name if no project name was supplied.
@@ -348,8 +349,8 @@ if (debug):
 	print(t)
 
 for j, node in enumerate(ina):
-	tn = telnetlib.Telnet(TELNET_HOST, str(node_accessors[j].console))
-	tn.open(TELNET_HOST, str(node_accessors[j].console))
+	tn = telnetlib.Telnet('127.0.0.1', str(node_accessors[j].console))
+	tn.open('127.0.0.1', str(node_accessors[j].console))
 	
 	tn.write(str("ionadmin\n").encode('utf-8'))
 	tn.read_until(":".encode('utf-8'))
