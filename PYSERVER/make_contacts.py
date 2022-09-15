@@ -1,3 +1,5 @@
+import time
+
 # ina has the structure of a list of dictionaries
 # each tuple has the name of the node, the 
 # number of the node, a list containing each 
@@ -36,3 +38,9 @@ def makeoscillatorycontactfile(ina, filename, osc_interval=10, cycle_count=10, u
                 result += str("a contact    +" + str(osc_interval*i) + " +" + str(osc_interval*(i+1) + osc_interval) + " " + str(node['number']) + " " + str(neighbor[0]) + " " + str(universallinkbitrate) + "\n")
             i += 2
     return result
+
+def convtoionabstimeformat(t):
+	t = time.ctime(t)
+	t = time.strptime(str(t))
+	return str(time.strftime("%Y/%m/%d-%H:%M:%S", t))
+	
