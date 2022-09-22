@@ -20,5 +20,5 @@ https://github.com/davidban77/gns3fy/
 - Python 3.10
 - telnetlib, gns3fy, json (python libraries)
 - GNS3 
-- Docker
+- Docker (https://www.docker.com/)
 - telnet client (should be installed with gns3 automatically)
