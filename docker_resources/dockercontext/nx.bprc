@@ -2,6 +2,9 @@
 1
 # Add an EID scheme.
 a scheme ipn 'ipnfw' 'ipnadminep’
+# start the admin program for status reports. 
+# appears not to get started with the above scheme command
+r 'ipnadminep'
 # Add some endpoints
 # a endpoint <endpoint> ‘x’ or ‘q’
 a endpoint ipn:<x>.0 x
