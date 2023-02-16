@@ -28,3 +28,6 @@
 - Select `Next`
 - Select `Finish`
 - Apply changes and close the template window
+- Right click your new template from the list, select `Configure template`
+  - check the box for `Auto start console`
+  - save and apply changes.
