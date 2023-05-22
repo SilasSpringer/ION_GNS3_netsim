@@ -284,7 +284,7 @@ def start_and_configure(ina, node_accessors, TELNET_HOST, universallinkbitrate, 
 
 		# run all the commands needed to configure a node.	
 		tn = telnetlib.Telnet(TELNET_HOST, str(node_accessors[j].console))
-		tn.open(TELNET_HOST, str(node_accessors[j].console))
+		# tn.open(TELNET_HOST, str(node_accessors[j].console))
 		for iface in node['interfaces']:
 			tmp = node_env.find('BANDWIDTH_CAP_' + iface[0])
 			if tmp == -1: # if the bandwidth cap wasnt set for this interface,
@@ -377,7 +377,7 @@ def set_abs_ref_time(ina, node_accessors, TELNET_HOST="127.0.0.1", offset=20):
 
 	for j, node in enumerate(ina):
 		tn = telnetlib.Telnet(TELNET_HOST, str(node_accessors[j].console))
-		tn.open(TELNET_HOST, str(node_accessors[j].console))
+		# tn.open(TELNET_HOST, str(node_accessors[j].console))
 		
 		tn.write(str("ionadmin\n").encode('utf-8'))
 		tn.read_until(":".encode('utf-8'))
