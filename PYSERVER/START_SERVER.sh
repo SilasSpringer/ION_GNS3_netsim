@@ -12,7 +12,7 @@ pyversion="python3.10"
 cmd="${pyversion} ${serverfile}"
 
 # process commandline inputs.
-# valid options are -[p|m|h] to set project name, running mode, and help menu respectively.
+# valid options are -[p|m|c|h] to set project name, running mode, contact file, and help menu respectively.
 while getopts ":p:m:c:h:" option; do
    case $option in
 		p) cmd="${cmd} -proj ${OPTARG}";;
@@ -63,7 +63,8 @@ ${cmd}
 help(){
 	echo "usage: ./${FILENAME} -[h|p|m] [ARGUMENT]... "
 	echo "	h | display this help message"
-	echo "	p | use the immediately following argument as the name of the GNS3 project to open"
+	echo "	p | use the immediately following argument as the name of the GNS3 project to open."
+	echo "  c | use the immediately following argument as the path to the contact file to use for the network."
 	echo "	m | use the immediately following argument as the running mode for the script. "
 	echo "		Valid options:"
 	echo "			\"none\"  	| no automatically started applications or processes on the nodes"
