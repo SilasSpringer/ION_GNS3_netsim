@@ -365,7 +365,7 @@ def start_and_configure(ina, node_accessors, TELNET_HOST, universallinkbitrate, 
 		# tn.read_until("@".encode('utf-8'))	
 	
 	# close telnet terminal connection. terminal remains open for the user, however.
-	tn.close()
+		tn.close()
 
 def set_abs_ref_time(ina, node_accessors, TELNET_HOST="127.0.0.1", offset=20):
 	t = int(time.time()) + offset
